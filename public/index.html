@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SpriteStream — sprite sheets from one image</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231d2a5c'/%3E%3Crect x='2' y='2' width='5' height='5' fill='%23ff7a45'/%3E%3Crect x='9' y='2' width='5' height='5' fill='%23f4f6ff' opacity='.6'/%3E%3Crect x='2' y='9' width='5' height='5' fill='%23f4f6ff' opacity='.6'/%3E%3Crect x='9' y='9' width='5' height='5' fill='%23f4f6ff' opacity='.3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    <h1>SpriteStream</h1>
+    <p>Turn one character image into a full sprite sheet.</p>
+  </div>
+  <div class="toolbar">
+    <button id="btnUndo" class="ghost" type="button" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="btnRedo" class="ghost" type="button" title="Redo (Ctrl+Shift+Z)">Redo</button>
+    <span class="sep"></span>
+    <button id="btnSave" class="ghost" type="button">Save project</button>
+    <button id="btnLoad" class="ghost" type="button">Open project</button>
+    <input id="fileProject" type="file" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="side">
+    <section class="card">
+      <h2>Connection</h2>
+      <label>Endpoint
+        <input data-setting="endpoint" data-type="text" type="text" placeholder="http://localhost:20128/v1" autocomplete="off" spellcheck="false">
+      </label>
+      <label>API key
+        <input data-setting="apiKey" data-type="text" type="password" placeholder="Leave empty to use SPRITE_API_KEY" autocomplete="off">
+      </label>
+      <label>Model
+        <input data-setting="model" data-type="text" type="text" placeholder="ag/gemini-3.1-flash-image" spellcheck="false">
+      </label>
+      <p id="connHint" class="hint"></p>
+    </section>
+
+    <section class="card">
+      <h2>Character</h2>
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose a reference image">
+        <img id="refPreview" alt="Reference image" hidden>
+        <p id="dropHint">Drop a reference image here, or click to browse</p>
+      </div>
+      <input id="fileRef" type="file" accept="image/*" hidden>
+      <button id="btnClearRef" class="link" type="button" hidden>Remove reference image</button>
+      <label>Describe the character
+        <textarea data-setting="character" data-type="text" rows="3" placeholder="A small knight in blue armor with a red plume"></textarea>
+      </label>
+      <div class="field-label">Art style</div>
+      <div id="styleChips" class="chips"></div>
+    </section>
+
+    <section class="card">
+      <h2>Animation</h2>
+      <label>Type
+        <select id="animation" data-setting="animation" data-type="text"></select>
+      </label>
+      <div class="grid3">
+        <label>Frames
+          <input data-setting="frameCount" data-type="number" type="number" min="1" max="32">
+        </label>
+        <label>Columns
+          <input data-setting="cols" data-type="number" type="number" min="1" max="8">
+        </label>
+        <label>Frame size
+          <select data-setting="frameSize" data-type="number">
+            <option value="128">128 px</option>
+            <option value="192">192 px</option>
+            <option value="256">256 px</option>
+            <option value="384">384 px</option>
+            <option value="512">512 px</option>
+          </select>
+        </label>
+      </div>
+      <button id="btnRebuild" class="ghost wide" type="button">Reset poses for this animation</button>
+    </section>
+
+    <section class="card">
+      <details>
+        <summary>Advanced</summary>
+        <label>Parallel requests
+          <input data-setting="concurrency" data-type="number" type="number" min="1" max="4">
+        </label>
+        <label class="check"><input data-setting="removeBg" data-type="bool" type="checkbox"> Remove background (magenta key)</label>
+        <label>Background tolerance <b id="tolLabel"></b>
+          <input data-setting="bgTolerance" data-type="number" type="range" min="5" max="90">
+        </label>
+        <label class="check"><input data-setting="sendReference" data-type="bool" type="checkbox"> Send reference image to the API</label>
+        <label class="check"><input data-setting="watermark" data-type="bool" type="checkbox"> Ask the API to add a watermark</label>
+        <label class="check"><input data-setting="promptExtend" data-type="bool" type="checkbox"> Let the API rewrite my prompt</label>
+      </details>
+    </section>
+  </aside>
+
+  <section class="stage">
+    <div class="actions">
+      <button id="btnGenerate" class="primary" type="button">Generate all frames</button>
+      <button id="btnMissing" class="ghost" type="button">Generate missing</button>
+      <button id="btnCancel" class="danger" type="button" hidden>Cancel</button>
+      <span class="grow"></span>
+      <button id="btnPng" class="ghost" type="button">Download PNG</button>
+      <button id="btnAtlas" class="ghost" type="button">Download JSON</button>
+    </div>
+    <div class="progress" role="progressbar" aria-label="Generation progress">
+      <div class="bar"><div id="progressBar"></div></div>
+      <span id="progressText"></span>
+    </div>
+    <div class="sheet-wrap"><canvas id="sheet" width="1024" height="512" aria-label="Sprite sheet"></canvas></div>
+    <p id="sheetMeta" class="meta-line"></p>
+  </section>
+
+  <aside class="side">
+    <section class="card">
+      <h2>Preview</h2>
+      <div class="preview-box"><canvas id="preview" width="192" height="192" aria-label="Animation preview"></canvas></div>
+      <div class="preview-controls">
+        <button id="btnPlay" class="ghost" type="button">Pause</button>
+        <input data-setting="fps" data-type="number" type="range" min="1" max="24" aria-label="Frames per second">
+        <b id="fpsLabel"></b>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Frames</h2>
+      <ol id="frameList" class="frames"></ol>
+    </section>
+  </aside>
+</main>
+<div id="toasts" aria-live="polite"></div>
+
+<script src="js/core/state.js"></script>
+<script src="js/core/history.js"></script>
+<script src="js/model/types.js"></script>
+<script src="js/model/serialize.js"></script>
+<script src="js/model/api.js"></script>
+<script src="js/view/canvas.js"></script>
+<script src="js/view/dom.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
