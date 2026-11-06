@@ -11,7 +11,7 @@ dependency-free Node.js server.
 
 ```bash
 npm install                      # dev tools only (acorn, jsdom, puppeteer-core)
-npm start                        # http://127.0.0.1:3000
+npm start                        # http://127.0.0.1:3500
 ```
 
 Open the app and fill in the **Connection** panel (endpoint, API key, model), or set them once:
